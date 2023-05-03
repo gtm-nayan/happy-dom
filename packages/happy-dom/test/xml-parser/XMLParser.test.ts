@@ -473,5 +473,21 @@ describe('XMLParser', () => {
 			expect(template.content.children[0].children.length).toBe(1);
 			expect(template.content.children[0].children[0].tagName).toBe('TD');
 		});
+
+		it('Parses HTML with attributes using colon (:).', () => {
+			const root = XMLParser.parse(
+				window.document,
+				'<template><component :is="type" :disabled="index > 1" data-testid="button"/></template>'
+			);
+
+			expect(root.childNodes.length).toBe(1);
+
+			const template = <IHTMLTemplateElement>root.childNodes[0];
+			expect(template.content.childNodes.length).toBe(1);
+			expect((<IHTMLElement>template.content.childNodes[0]).tagName).toBe('COMPONENT');
+			expect((<IHTMLElement>template.content.childNodes[0]).getAttribute(':disabled')).toBe(
+				'index > 1'
+			);
+		});
 	});
 });
