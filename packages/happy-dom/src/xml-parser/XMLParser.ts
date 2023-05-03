@@ -145,7 +145,7 @@ export default class XMLParser {
 								startTag === 'SVG' ? NamespaceURI.svg : (<IElement>currentElement).namespaceURI;
 							const newElement = document.createElementNS(namespaceURI, startTag);
 
-							currentElement.appendChild(currentElement);
+							currentElement.appendChild(newElement);
 							currentElement = newElement;
 							isStartTag = true;
 						} else if (match[15]) {
