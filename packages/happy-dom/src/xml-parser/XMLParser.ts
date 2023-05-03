@@ -61,11 +61,10 @@ export default class XMLParser {
 		const stack: Array<IElement | IDocumentFragment> = [root];
 		const markupRegexp = new RegExp(MARKUP_REGEXP, 'gi');
 		let currentElement: IElement | IDocumentFragment | null = root;
-		let lastTextIndex = 0;
 		let match: RegExpExecArray;
 		let plainTextTagName: string | null = null;
 		let unnestableTagName: string | null = null;
-		let startTagEndIndex = 0;
+		let lastTagIndex = 0;
 		let isStartTag = false;
 
 		if (data !== null && data !== undefined) {
@@ -91,33 +90,36 @@ export default class XMLParser {
 
 					// Plain text elements such as <script> and <style> should only contain text.
 					currentElement.appendChild(
-						document.createTextNode(data.substring(startTagEndIndex, match.index))
+						document.createTextNode(data.substring(lastTagIndex, match.index))
 					);
 
 					plainTextTagName = null;
 				} else if (!plainTextTagName) {
 					if (!isStartTag) {
-						if (match.index !== lastTextIndex) {
+						if (match.index !== lastTagIndex) {
 							// Text.
 
 							currentElement.appendChild(
-								document.createTextNode(data.substring(lastTextIndex, match.index))
+								document.createTextNode(data.substring(lastTagIndex, match.index))
 							);
 						}
 
 						if (match[1]) {
 							// Comment.
 
+							lastTagIndex = markupRegexp.lastIndex;
 							currentElement.appendChild(document.createComment(match[1]));
 						} else if (match[2]) {
 							// Exclamation mark comment.
 
+							lastTagIndex = markupRegexp.lastIndex;
 							currentElement.appendChild(
 								this._getDocumentTypeNode(document, match[2]) || document.createComment(match[2])
 							);
 						} else if (match[3] && match[4]) {
 							// Processing instruction.
 
+							lastTagIndex = markupRegexp.lastIndex;
 							currentElement.appendChild(document.createProcessingInstruction(match[3], match[4]));
 						} else if (match[5]) {
 							// Start tag.
@@ -156,6 +158,7 @@ export default class XMLParser {
 							}
 
 							currentElement = stack.pop() || null;
+							lastTagIndex = markupRegexp.lastIndex;
 
 							if (
 								currentElement &&
@@ -196,6 +199,7 @@ export default class XMLParser {
 							// Self-closing end of start tag.
 
 							isStartTag = false;
+							lastTagIndex = markupRegexp.lastIndex;
 						} else if (match[14]) {
 							// End of start tag.
 
@@ -204,7 +208,7 @@ export default class XMLParser {
 								plainTextTagName = PlainTextElements.includes((<IElement>currentElement).tagName)
 									? (<IElement>currentElement).tagName
 									: null;
-								startTagEndIndex = markupRegexp.lastIndex;
+								lastTagIndex = markupRegexp.lastIndex;
 
 								if (!plainTextTagName) {
 									stack.push(currentElement);
@@ -216,11 +220,10 @@ export default class XMLParser {
 							}
 
 							isStartTag = false;
+							lastTagIndex = markupRegexp.lastIndex;
 						}
 					}
 				}
-
-				lastTextIndex = markupRegexp.lastIndex;
 			}
 		}
 
