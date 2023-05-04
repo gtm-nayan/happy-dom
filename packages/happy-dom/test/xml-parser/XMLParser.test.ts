@@ -12,10 +12,9 @@ import IHTMLTemplateElement from '../../src/nodes/html-template-element/IHTMLTem
 
 const GET_EXPECTED_HTML = (html: string): string =>
 	html
-		.replace('<?Question mark comment>', '<!--?Question mark comment-->')
-		.replace('<!Exclamation mark comment>', '<!--Exclamation mark comment-->')
-		.replace('<self-closing-custom-tag />', '<self-closing-custom-tag></self-closing-custom-tag>')
-		.replace(/[\s]/gm, '');
+		.replace('<?processing instruction?>', '<!--?processing instruction?-->')
+		.replace('<!Exclamation mark comment>', '<!--Exclamation mark comment!-->')
+		.replace('<self-closing-custom-tag />', '<self-closing-custom-tag></self-closing-custom-tag>');
 
 describe('XMLParser', () => {
 	let window: IWindow;
@@ -121,9 +120,7 @@ describe('XMLParser', () => {
 
 		it('Parses an entire HTML page.', () => {
 			const root = XMLParser.parse(window.document, XMLParserHTML);
-			expect(new XMLSerializer().serializeToString(root).replace(/[\s]/gm, '')).toBe(
-				GET_EXPECTED_HTML(XMLParserHTML)
-			);
+			expect(new XMLSerializer().serializeToString(root)).toBe(GET_EXPECTED_HTML(XMLParserHTML));
 		});
 
 		it('Parses a page with document type set to "HTML 4.01".', () => {
@@ -136,9 +133,7 @@ describe('XMLParser', () => {
 			expect(doctype.name).toBe('HTML');
 			expect(doctype.publicId).toBe('-//W3C//DTD HTML 4.01//EN');
 			expect(doctype.systemId).toBe('http://www.w3.org/TR/html4/strict.dtd');
-			expect(new XMLSerializer().serializeToString(root).replace(/[\s]/gm, '')).toBe(
-				GET_EXPECTED_HTML(pageHTML)
-			);
+			expect(new XMLSerializer().serializeToString(root)).toBe(GET_EXPECTED_HTML(pageHTML));
 		});
 
 		it('Parses a page with document type set to "MathML 1.01".', () => {
@@ -151,9 +146,7 @@ describe('XMLParser', () => {
 			expect(doctype.name).toBe('math');
 			expect(doctype.publicId).toBe('');
 			expect(doctype.systemId).toBe('http://www.w3.org/Math/DTD/mathml1/mathml.dtd');
-			expect(new XMLSerializer().serializeToString(root).replace(/[\s]/gm, '')).toBe(
-				GET_EXPECTED_HTML(pageHTML)
-			);
+			expect(new XMLSerializer().serializeToString(root)).toBe(GET_EXPECTED_HTML(pageHTML));
 		});
 
 		it('Handles unclosed tags of unnestable elements (e.g. <a>, <li>).', () => {
@@ -171,7 +164,7 @@ describe('XMLParser', () => {
 				`
 			);
 
-			expect(new XMLSerializer().serializeToString(root).replace(/[\s]/gm, '')).toBe(
+			expect(new XMLSerializer().serializeToString(root)).toBe(
 				`
 				<div class="test" disabled="">
 					<ul>
@@ -181,7 +174,7 @@ describe('XMLParser', () => {
 					</ul>
 					<a></a><a>Test</a>
 				</div>
-				`.replace(/[\s]/gm, '')
+				`
 			);
 		});
 
@@ -202,12 +195,12 @@ describe('XMLParser', () => {
 			expect((<IHTMLElement>root.children[0].children[1]).innerText).toBe('<b></b>');
 			expect((<IHTMLElement>root.children[0].children[2]).innerText).toBe('<b></b>');
 
-			expect(new XMLSerializer().serializeToString(root).replace(/[\s]/gm, '')).toBe(
+			expect(new XMLSerializer().serializeToString(root)).toBe(
 				`<div>
 					<script>if(1<Math['random']()){}else if(Math['random']()>1){console.log("1")}</script>
 					<script><b></b></script>
 					<style><b></b></style>
-				</div>`.replace(/[\s]/gm, '')
+				</div>`
 			);
 
 			const root2 = XMLParser.parse(
@@ -318,7 +311,7 @@ describe('XMLParser', () => {
 			expect(svg.attributes['xmlns'].ownerElement === svg).toBe(true);
 			expect(svg.attributes['xmlns'].ownerDocument === document).toBe(true);
 
-			expect(new XMLSerializer().serializeToString(root).replace(/[\s]/gm, '')).toBe(
+			expect(new XMLSerializer().serializeToString(root)).toBe(
 				`
 				<div>
 					<svg viewBox="0 0 300 100" stroke="red" fill="grey" xmlns="${NamespaceURI.html}">
@@ -330,7 +323,7 @@ describe('XMLParser', () => {
 						</svg>
 					</svg>
 				</div>
-			`.replace(/[\s]/gm, '')
+			`
 			);
 		});
 
@@ -358,7 +351,7 @@ describe('XMLParser', () => {
 			`
 			);
 
-			expect(new XMLSerializer().serializeToString(root).replace(/[\s]/gm, '')).toBe(
+			expect(new XMLSerializer().serializeToString(root)).toBe(
 				`
 				<div>
 					<svg viewBox="0 0 300 100" stroke="red" fill="grey" xmlns="${NamespaceURI.html}">
@@ -377,7 +370,7 @@ describe('XMLParser', () => {
 						</svg>
 					</polygon></path></line></ellipse></svg>
 				</div>
-			`.replace(/[\s]/gm, '')
+			`
 			);
 		});
 

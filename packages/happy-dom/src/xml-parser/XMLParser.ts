@@ -1,4 +1,3 @@
-import Element from '../nodes/element/Element';
 import IDocument from '../nodes/document/IDocument';
 import VoidElements from '../config/VoidElements';
 import UnnestableElements from '../config/UnnestableElements';
@@ -10,6 +9,7 @@ import IDocumentFragment from '../nodes/document-fragment/IDocumentFragment';
 import PlainTextElements from '../config/PlainTextElements';
 import IDocumentType from '../nodes/document-type/IDocumentType';
 import { decode } from 'he';
+import INode from '../nodes/node/INode';
 
 /**
  * Markup RegExp.
@@ -19,19 +19,32 @@ import { decode } from 'he';
  * Group 3: Processing instruction target (e.g. "xml"" in "<?xml version="1.0"?>").
  * Group 4: Processing instruction data (e.g. "version="1.0"" in "<?xml version="1.0"?>").
  * Group 5: Start tag (e.g. "div" in "<div").
- * Group 6: Attribute name when the attribute has a value using double apostrophe (e.g. "name" in "<div name="value">").
- * Group 7: Attribute value when the attribute has a value using double apostrophe (e.g. "value" in "<div name="value">").
- * Group 8: Attribute name when the attribute has a value using single apostrophe (e.g. "name" in "<div name='value'>").
- * Group 9: Attribute value when the attribute has a value using single apostrophe (e.g. "value" in "<div name='value'>").
- * Group 10: Attribute name when the attribute has a value using no apostrophe (e.g. "name" in "<div name=value>").
- * Group 11: Attribute value when the attribute has a value using no apostrophe (e.g. "value" in "<div name=value>").
- * Group 12: Attribute name when the attribute has no value (e.g. "disabled" in "<div disabled>").
- * Group 13: Self-closing end of start tag (e.g. "/>" in "<div/>").
- * Group 14: End of start tag (e.g. ">" in "<div>").
- * Group 15: End tag (e.g. "div" in "</div>").
+ * Group 6: Self-closing end of start tag (e.g. "/>" in "<div/>").
+ * Group 7: End of start tag (e.g. ">" in "<div>").
+ * Group 8: End tag (e.g. "div" in "</div>").
  */
 const MARKUP_REGEXP =
-	/<!--([^!]+)!-->|<!([^>]+)>|<\?([a-zA-Z0-9-]+) ([^?]+)\?>|<([a-zA-Z-]+)|([a-zA-Z0-9-_:]+) *= *"([^"]*)"|([a-zA-Z0-9-_:]+) *= *'([^']*)'|([a-zA-Z0-9-_:]+) *= *([^ >]*)|([a-zA-Z0-9-_:]+)|(\/>)|(>)|<\/([a-zA-Z-]+)>/gm;
+	/<!--([^!]+)!-->|<!([^>-]+)>|<\?([a-zA-Z0-9-]+) ([^?]+)\?>|<([a-zA-Z-]+)\s*|(\/>)|(>)|<\/([a-zA-Z-]+)>/gm;
+
+/**
+ * Attribute RegExp.
+ *
+ * Group 1: Attribute name when the attribute has a value using double apostrophe (e.g. "name" in "<div name="value">").
+ * Group 2: Attribute value when the attribute has a value using double apostrophe (e.g. "value" in "<div name="value">").
+ * Group 3: Attribute name when the attribute has a value using single apostrophe (e.g. "name" in "<div name='value'>").
+ * Group 4: Attribute value when the attribute has a value using single apostrophe (e.g. "value" in "<div name='value'>").
+ * Group 5: Attribute name when the attribute has a value using no apostrophe (e.g. "name" in "<div name=value>").
+ * Group 6: Attribute value when the attribute has a value using no apostrophe (e.g. "value" in "<div name=value>").
+ * Group 7: Attribute name when the attribute has no value (e.g. "disabled" in "<div disabled>").
+ */
+const ATTRIBUTE_REGEXP =
+	/([a-zA-Z0-9-_:]+) *= *"([^"]*)"\s*|([a-zA-Z0-9-_:]+) *= *'([^']*)'\s*|([a-zA-Z0-9-_:]+) *= *([^\s]*)\s*|([a-zA-Z0-9-_:]+)\s*/gm;
+
+enum MarkupReadStateEnum {
+	startOrEndTag = 'startOrEndTag',
+	insideStartTag = 'insideStartTag',
+	plainTextContent = 'plainTextContent'
+}
 
 /**
  * Document type attribute RegExp.
@@ -58,173 +71,203 @@ export default class XMLParser {
 		evaluateScripts = false
 	): IDocumentFragment {
 		const root = document.createDocumentFragment();
-		const stack: Array<IElement | IDocumentFragment> = [root];
+		const stack: INode[] = [root];
 		const markupRegexp = new RegExp(MARKUP_REGEXP, 'gi');
-		let currentElement: IElement | IDocumentFragment | null = root;
+		let currentNode: INode | null = root;
 		let match: RegExpExecArray;
 		let plainTextTagName: string | null = null;
-		let unnestableTagName: string | null = null;
-		let lastTagIndex = 0;
-		let isStartTag = false;
+		const unnestableTagNames: string[] = [];
+		let readState: MarkupReadStateEnum = MarkupReadStateEnum.startOrEndTag;
+		let startTagIndex = 0;
+		let lastIndex = 0;
 
 		if (data !== null && data !== undefined) {
 			data = String(data);
 
 			while ((match = markupRegexp.exec(data))) {
-				if (!currentElement) {
+				if (!currentNode) {
 					return root;
 				}
 
-				if (!!plainTextTagName && match[15] && plainTextTagName === match[15].toUpperCase()) {
-					// End of plain text tag.
+				switch (readState) {
+					case MarkupReadStateEnum.startOrEndTag:
+						if (
+							match.index !== lastIndex &&
+							(match[1] || match[2] || match[3] || match[5] || match[8])
+						) {
+							// Plain text between tags.
 
-					// Scripts are not allowed to be executed when they are parsed using innerHTML, outerHTML, replaceWith() etc.
-					// However, they are allowed to be executed when document.write() is used.
-					// See: https://developer.mozilla.org/en-US/docs/Web/API/HTMLScriptElement
-					if (plainTextTagName === 'SCRIPT') {
-						(<HTMLScriptElement>currentElement)._evaluateScript = evaluateScripts;
-					} else if (plainTextTagName === 'LINK') {
-						// An assumption that the same rule should be applied for the HTMLLinkElement is made here.
-						(<HTMLLinkElement>currentElement)._evaluateCSS = evaluateScripts;
-					}
-
-					// Plain text elements such as <script> and <style> should only contain text.
-					currentElement.appendChild(
-						document.createTextNode(data.substring(lastTagIndex, match.index))
-					);
-
-					plainTextTagName = null;
-				} else if (!plainTextTagName) {
-					if (!isStartTag) {
-						if (match.index !== lastTagIndex) {
-							// Text.
-
-							currentElement.appendChild(
-								document.createTextNode(data.substring(lastTagIndex, match.index))
+							currentNode.appendChild(
+								document.createTextNode(data.substring(lastIndex, match.index))
 							);
 						}
 
 						if (match[1]) {
 							// Comment.
 
-							lastTagIndex = markupRegexp.lastIndex;
-							currentElement.appendChild(document.createComment(match[1]));
+							// @Refer https://en.wikipedia.org/wiki/Conditional_comment
+							// @Refer: https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/
+							if (match[1].startsWith('[if ') && match[2].endsWith(']')) {
+								readState = MarkupReadStateEnum.plainTextContent;
+								startTagIndex = match.index;
+							} else {
+								currentNode.appendChild(document.createComment(match[1]));
+							}
 						} else if (match[2]) {
-							// Exclamation mark comment.
+							// Exclamation mark comment (usually <!DOCTYPE>).
 
-							lastTagIndex = markupRegexp.lastIndex;
-							currentElement.appendChild(
+							currentNode.appendChild(
 								this._getDocumentTypeNode(document, match[2]) || document.createComment(match[2])
 							);
 						} else if (match[3] && match[4]) {
 							// Processing instruction.
 
-							lastTagIndex = markupRegexp.lastIndex;
-							currentElement.appendChild(document.createProcessingInstruction(match[3], match[4]));
+							currentNode.appendChild(
+								document.createProcessingInstruction(match[3], match[4].trim())
+							);
 						} else if (match[5]) {
 							// Start tag.
 
-							const startTag = match[5].toUpperCase();
+							const tagName = match[5].toUpperCase();
 
 							// Some elements are not allowed to be nested (e.g. "<a><a></a></a>" is not allowed.).
 							// Therefore we need to auto-close the tag, so that it become valid (e.g. "<a></a><a></a>").
-							if (!!unnestableTagName && unnestableTagName === startTag) {
-								currentElement = stack.pop() || null;
-
-								if (
-									currentElement &&
-									UnnestableElements.includes((<IElement>currentElement).tagName)
-								) {
-									unnestableTagName = (<IElement>currentElement).tagName;
-								}
+							const unnestableTagNameIndex = unnestableTagNames.indexOf(tagName);
+							if (unnestableTagNameIndex !== -1) {
+								stack.pop();
+								currentNode = stack[stack.length - 1] || root;
+								unnestableTagNames.splice(unnestableTagNameIndex, 1);
 							}
 
 							// NamespaceURI is inherited from the parent element.
 							// It should default to SVG for SVG elements.
 							const namespaceURI =
-								startTag === 'SVG' ? NamespaceURI.svg : (<IElement>currentElement).namespaceURI;
-							const newElement = document.createElementNS(namespaceURI, startTag);
+								tagName === 'svg'
+									? NamespaceURI.svg
+									: (<IElement>currentNode).namespaceURI || NamespaceURI.html;
+							const newElement = document.createElementNS(namespaceURI, tagName);
 
-							currentElement.appendChild(newElement);
-							currentElement = newElement;
-							isStartTag = true;
-						} else if (match[15]) {
+							currentNode.appendChild(newElement);
+							currentNode = newElement;
+							stack.push(currentNode);
+							readState = MarkupReadStateEnum.insideStartTag;
+							startTagIndex = markupRegexp.lastIndex;
+						} else if (match[8]) {
 							// End tag.
 
 							// Some elements are not allowed to be nested (e.g. "<a><a></a></a>" is not allowed.).
 							// Therefore we need to auto-close the tag, so that it become valid (e.g. "<a></a><a></a>").
-							if (unnestableTagName && (<IElement>currentElement).tagName === unnestableTagName) {
-								unnestableTagName = null;
-							}
-
-							currentElement = stack.pop() || null;
-							lastTagIndex = markupRegexp.lastIndex;
-
-							if (
-								currentElement &&
-								UnnestableElements.includes((<IElement>currentElement).tagName)
-							) {
-								unnestableTagName = (<IElement>currentElement).tagName;
-							}
-						}
-					} else {
-						if (
-							(match[6] && match[7]) ||
-							(match[8] && match[9]) ||
-							(match[10] && match[11]) ||
-							match[12]
-						) {
-							// Attribute name and value.
-
-							const attributeName = match[6] || match[8] || match[10] || match[12];
-							const attributeValue = match[12] ? '' : decode(match[7] || match[9] || match[11]);
-
-							// @see https://developer.mozilla.org/en-US/docs/Web/SVG/Namespaces_Crash_Course
-							if (attributeName === 'xmlns') {
-								(<string>currentElement['namespaceURI']) = attributeValue;
-								for (const name of Object.keys((<Element>currentElement)._attributes)) {
-									const attr = (<Element>currentElement)._attributes;
-									if (attr[name].namespaceURI === null) {
-										attr[name].namespaceURI = attributeValue;
-									}
-								}
-							}
-
-							(<IElement>currentElement).setAttributeNS(
-								(<IElement>currentElement).namespaceURI,
-								attributeName,
-								attributeValue
+							const unnestableTagNameIndex = unnestableTagNames.indexOf(
+								(<IElement>currentNode).tagName
 							);
-						} else if (match[13]) {
-							// Self-closing end of start tag.
+							if (unnestableTagNameIndex !== -1) {
+								unnestableTagNames.splice(unnestableTagNameIndex, 1);
+							}
 
-							isStartTag = false;
-							lastTagIndex = markupRegexp.lastIndex;
-						} else if (match[14]) {
+							stack.pop();
+							currentNode = stack[stack.length - 1] || root;
+						} else {
+							// Plain text between tags, including the match as it is not a valid start or end tag.
+
+							currentNode.appendChild(
+								document.createTextNode(data.substring(lastIndex, markupRegexp.lastIndex))
+							);
+						}
+						break;
+					case MarkupReadStateEnum.insideStartTag:
+						// Self-closing or non-self-closing tag.
+						if (match[6] || match[7]) {
 							// End of start tag.
 
-							if (!VoidElements.includes((<IElement>currentElement).tagName)) {
-								// Plain text elements such as <script> and <style> should only contain text.
-								plainTextTagName = PlainTextElements.includes((<IElement>currentElement).tagName)
-									? (<IElement>currentElement).tagName
-									: null;
-								lastTagIndex = markupRegexp.lastIndex;
+							// Attribute name and value.
 
-								if (!plainTextTagName) {
-									stack.push(currentElement);
-								}
+							const attributeString = data.substring(startTagIndex, match.index);
+							let attributeMatch: RegExpExecArray;
 
-								if (UnnestableElements.includes((<IElement>currentElement).tagName)) {
-									unnestableTagName = (<IElement>currentElement).tagName;
-								}
+							while ((attributeMatch = ATTRIBUTE_REGEXP.exec(attributeString))) {
+								const name =
+									attributeMatch[1] || attributeMatch[3] || attributeMatch[5] || attributeMatch[7];
+								const rawValue = attributeMatch[2] || attributeMatch[4] || attributeMatch[6];
+								const value = rawValue ? decode(rawValue) : '';
+								const namespaceURI =
+									(<IElement>currentNode).tagName === 'SVG' && name === 'xmlns' ? value : null;
+
+								(<IElement>currentNode).setAttributeNS(namespaceURI, name, value);
+
+								startTagIndex += attributeMatch[0].length;
 							}
 
-							isStartTag = false;
-							lastTagIndex = markupRegexp.lastIndex;
+							// We need to check if the attribute string is read completely.
+							// The attribute string can potentially contain "/>" or ">".
+							if (startTagIndex === match.index) {
+								// Non-self-closing tag
+								if (match[7] && !VoidElements.includes((<IElement>currentNode).tagName)) {
+									// Plain text elements such as <script> and <style> should only contain text.
+									plainTextTagName = PlainTextElements.includes((<IElement>currentNode).tagName)
+										? (<IElement>currentNode).tagName
+										: null;
+
+									if (!!plainTextTagName) {
+										readState = MarkupReadStateEnum.plainTextContent;
+									}
+
+									if (UnnestableElements.includes((<IElement>currentNode).tagName)) {
+										unnestableTagNames.push((<IElement>currentNode).tagName);
+									}
+								} else {
+									stack.pop();
+									currentNode = stack[stack.length - 1] || root;
+								}
+
+								readState = MarkupReadStateEnum.startOrEndTag;
+								startTagIndex = markupRegexp.lastIndex;
+							}
 						}
-					}
+
+						break;
+					case MarkupReadStateEnum.plainTextContent:
+						if (!!plainTextTagName && match[8] && match[8].toUpperCase() === plainTextTagName) {
+							// End of plain text tag.
+
+							// Scripts are not allowed to be executed when they are parsed using innerHTML, outerHTML, replaceWith() etc.
+							// However, they are allowed to be executed when document.write() is used.
+							// See: https://developer.mozilla.org/en-US/docs/Web/API/HTMLScriptElement
+							if (plainTextTagName === 'SCRIPT') {
+								(<HTMLScriptElement>currentNode)._evaluateScript = evaluateScripts;
+							} else if (plainTextTagName === 'LINK') {
+								// An assumption that the same rule should be applied for the HTMLLinkElement is made here.
+								(<HTMLLinkElement>currentNode)._evaluateCSS = evaluateScripts;
+							}
+
+							// Plain text elements such as <script> and <style> should only contain text.
+							currentNode.appendChild(
+								document.createTextNode(data.substring(startTagIndex, match.index))
+							);
+
+							stack.pop();
+							currentNode = stack[stack.length - 1] || root;
+							plainTextTagName = null;
+						} else if (!plainTextTagName && match[1] && match[1] === '[endif]') {
+							// End of conditional comment.
+
+							currentNode.appendChild(
+								document.createTextNode(data.substring(startTagIndex, match.index))
+							);
+
+							readState = MarkupReadStateEnum.startOrEndTag;
+						}
+
+						break;
 				}
+
+				lastIndex = markupRegexp.lastIndex;
 			}
+		}
+
+		if (lastIndex !== data.length) {
+			// Plain text after tags.
+
+			currentNode.appendChild(document.createTextNode(data.substring(lastIndex)));
 		}
 
 		return root;
