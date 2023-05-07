@@ -60,7 +60,7 @@ export default class XMLSerializer {
 				}
 				return html;
 			case NodeTypeEnum.commentNode:
-				return `<!--${root.textContent}!-->`;
+				return `<!--${root.textContent}-->`;
 			case NodeTypeEnum.processingInstructionNode:
 				return `<!--?${(<IProcessingInstruction>root).target} ${root.textContent}?-->`;
 			case NodeTypeEnum.textNode:

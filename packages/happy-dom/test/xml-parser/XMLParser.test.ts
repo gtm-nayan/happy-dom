@@ -13,7 +13,8 @@ import IHTMLTemplateElement from '../../src/nodes/html-template-element/IHTMLTem
 const GET_EXPECTED_HTML = (html: string): string =>
 	html
 		.replace('<?processing instruction?>', '<!--?processing instruction?-->')
-		.replace('<!Exclamation mark comment>', '<!--Exclamation mark comment!-->')
+		.replace('<!Exclamation mark comment>', '<!--Exclamation mark comment-->')
+		.replace('<!DOCTYPE HTML', '<!DOCTYPE html')
 		.replace('<self-closing-custom-tag />', '<self-closing-custom-tag></self-closing-custom-tag>');
 
 describe('XMLParser', () => {
@@ -130,7 +131,7 @@ describe('XMLParser', () => {
 			);
 			const root = XMLParser.parse(window.document, pageHTML);
 			const doctype = <DocumentType>root.childNodes[0];
-			expect(doctype.name).toBe('HTML');
+			expect(doctype.name).toBe('html');
 			expect(doctype.publicId).toBe('-//W3C//DTD HTML 4.01//EN');
 			expect(doctype.systemId).toBe('http://www.w3.org/TR/html4/strict.dtd');
 			expect(new XMLSerializer().serializeToString(root)).toBe(GET_EXPECTED_HTML(pageHTML));
@@ -228,6 +229,7 @@ describe('XMLParser', () => {
 		});
 
 		it('Parses an SVG with "xmlns" set to HTML.', () => {
+			debugger;
 			const root = XMLParser.parse(
 				window.document,
 				`
@@ -354,7 +356,7 @@ describe('XMLParser', () => {
 			expect(new XMLSerializer().serializeToString(root)).toBe(
 				`
 				<div>
-					<svg viewBox="0 0 300 100" stroke="red" fill="grey" xmlns="${NamespaceURI.html}">
+					<svg viewBox="0 0 300 100" stroke="red" fill="grey" xmlns="http://www.w3.org/1999/xhtml">
 						<ellipse cx="50" cy="50" r="40">
 						<line cx="50" cy="50" r="40">
 						<path cx="50" cy="50" r="40">
@@ -368,9 +370,9 @@ describe('XMLParser', () => {
 						<svg viewBox="0 0 10 10" x="200" width="100">
 							<circle cx="5" cy="5" r="4"></circle>
 						</svg>
-					</polygon></path></line></ellipse></svg>
-				</div>
-			`
+					</polygon>
+				</path>
+			</line></ellipse></svg></div>`
 			);
 		});
 
@@ -468,6 +470,7 @@ describe('XMLParser', () => {
 		});
 
 		it('Parses HTML with attributes using colon (:).', () => {
+			debugger;
 			const root = XMLParser.parse(
 				window.document,
 				'<template><component :is="type" :disabled="index > 1" data-testid="button"/></template>'

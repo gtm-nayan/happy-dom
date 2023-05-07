@@ -24,7 +24,7 @@ import INode from '../nodes/node/INode';
  * Group 8: End tag (e.g. "div" in "</div>").
  */
 const MARKUP_REGEXP =
-	/<!--([^!]+)!-->|<!([^>-]+)>|<\?([a-zA-Z0-9-]+) ([^?]+)\?>|<([a-zA-Z-]+)\s*|(\/>)|(>)|<\/([a-zA-Z-]+)>/gm;
+	/<!--([^->]+)-{0,2}>|<!([^>]+)>|<\?([a-zA-Z0-9-]+) ([^?]+)\?>|<([a-zA-Z-]+)|(\/>)|(>)|<\/([a-zA-Z-]+)>/gm;
 
 /**
  * Attribute RegExp.
@@ -38,7 +38,7 @@ const MARKUP_REGEXP =
  * Group 7: Attribute name when the attribute has no value (e.g. "disabled" in "<div disabled>").
  */
 const ATTRIBUTE_REGEXP =
-	/([a-zA-Z0-9-_:]+) *= *"([^"]*)"\s*|([a-zA-Z0-9-_:]+) *= *'([^']*)'\s*|([a-zA-Z0-9-_:]+) *= *([^\s]*)\s*|([a-zA-Z0-9-_:]+)\s*/gm;
+	/\s*([a-zA-Z0-9-_:]+) *= *"([^"]*)"|\s*([a-zA-Z0-9-_:]+) *= *'([^']*)'|\s*([a-zA-Z0-9-_:]+) *= *([^"' >]+)|\s+([a-zA-Z0-9-_:]+)(?:\s+|$)/gm;
 
 enum MarkupReadStateEnum {
 	startOrEndTag = 'startOrEndTag',
@@ -107,7 +107,7 @@ export default class XMLParser {
 
 							// @Refer https://en.wikipedia.org/wiki/Conditional_comment
 							// @Refer: https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/
-							if (match[1].startsWith('[if ') && match[2].endsWith(']')) {
+							if (match[1].startsWith('[if ') && match[1].endsWith(']')) {
 								readState = MarkupReadStateEnum.plainTextContent;
 								startTagIndex = match.index;
 							} else {
@@ -142,7 +142,7 @@ export default class XMLParser {
 							// NamespaceURI is inherited from the parent element.
 							// It should default to SVG for SVG elements.
 							const namespaceURI =
-								tagName === 'svg'
+								tagName === 'SVG'
 									? NamespaceURI.svg
 									: (<IElement>currentNode).namespaceURI || NamespaceURI.html;
 							const newElement = document.createElementNS(namespaceURI, tagName);
@@ -207,9 +207,9 @@ export default class XMLParser {
 										? (<IElement>currentNode).tagName
 										: null;
 
-									if (!!plainTextTagName) {
-										readState = MarkupReadStateEnum.plainTextContent;
-									}
+									readState = !!plainTextTagName
+										? MarkupReadStateEnum.plainTextContent
+										: MarkupReadStateEnum.startOrEndTag;
 
 									if (UnnestableElements.includes((<IElement>currentNode).tagName)) {
 										unnestableTagNames.push((<IElement>currentNode).tagName);
@@ -217,9 +217,9 @@ export default class XMLParser {
 								} else {
 									stack.pop();
 									currentNode = stack[stack.length - 1] || root;
+									readState = MarkupReadStateEnum.startOrEndTag;
 								}
 
-								readState = MarkupReadStateEnum.startOrEndTag;
 								startTagIndex = markupRegexp.lastIndex;
 							}
 						}
@@ -247,6 +247,7 @@ export default class XMLParser {
 							stack.pop();
 							currentNode = stack[stack.length - 1] || root;
 							plainTextTagName = null;
+							readState = MarkupReadStateEnum.startOrEndTag;
 						} else if (!plainTextTagName && match[1] && match[1] === '[endif]') {
 							// End of conditional comment.
 
@@ -262,12 +263,12 @@ export default class XMLParser {
 
 				lastIndex = markupRegexp.lastIndex;
 			}
-		}
 
-		if (lastIndex !== data.length) {
-			// Plain text after tags.
+			if (lastIndex !== data.length) {
+				// Plain text after tags.
 
-			currentNode.appendChild(document.createTextNode(data.substring(lastIndex)));
+				currentNode.appendChild(document.createTextNode(data.substring(lastIndex)));
+			}
 		}
 
 		return root;
@@ -304,6 +305,10 @@ export default class XMLParser {
 		const publicId = isPublic ? attributes[0] || '' : '';
 		const systemId = isPublic ? attributes[1] || '' : attributes[0] || '';
 
-		return document.implementation.createDocumentType(docTypeSplit[1], publicId, systemId);
+		return document.implementation.createDocumentType(
+			docTypeSplit[1].toLowerCase(),
+			publicId,
+			systemId
+		);
 	}
 }
