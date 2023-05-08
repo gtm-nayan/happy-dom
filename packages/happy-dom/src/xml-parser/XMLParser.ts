@@ -201,6 +201,8 @@ export default class XMLParser {
 										(attributeMatch[5] && attributeMatch[6] === attributeMatch[8]) ||
 										attributeMatch[9]
 									) {
+										// Valid attribute name and value.
+
 										const name = attributeMatch[1] || attributeMatch[5] || attributeMatch[9] || '';
 										const rawValue = attributeMatch[3] || attributeMatch[7] || '';
 										const value = rawValue ? decode(rawValue) : '';
@@ -212,6 +214,8 @@ export default class XMLParser {
 										startTagIndex += attributeMatch[0].length;
 										attributeLatestIndex = attributeRegexp.lastIndex;
 									} else if (attributeMatch[10] && attributeLatestIndex === attributeMatch.index) {
+										// Invalid characters that should be trimmed.
+
 										startTagIndex += attributeMatch[0].length;
 									}
 								}
