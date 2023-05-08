@@ -673,6 +673,7 @@ describe('QuerySelector', () => {
 		});
 
 		it('Returns all elements matching "[data-foo]:not([data-bar])".', () => {
+			debugger;
 			document.body.innerHTML = `
 				<div data-foo data-bar class="foo bar"></div>
 				<div data-foo class="foo"></div>
@@ -708,6 +709,7 @@ describe('QuerySelector', () => {
 
 		it('Returns all elements matching ":nth-child(n+8)".', () => {
 			const container = document.createElement('div');
+			debugger;
 			container.innerHTML = QuerySelectorNthChildHTML;
 			const elements = container.querySelectorAll(':nth-child(n+8)');
 
@@ -804,7 +806,6 @@ describe('QuerySelector', () => {
 
 		it('Returns all elements matching ":nth-of-type(odd)".', () => {
 			const container = document.createElement('div');
-			debugger;
 			container.innerHTML = QuerySelectorNthChildHTML;
 			const elements = container.querySelectorAll(':nth-of-type(odd)');
 
@@ -920,7 +921,6 @@ describe('QuerySelector', () => {
 
 		it('Returns the first element matching "div > div > span".', () => {
 			const container = document.createElement('div');
-			debugger;
 			container.innerHTML = QuerySelectorHTML;
 			const span = container.querySelector('div > div > span');
 			expect(span === container.children[0].children[1].children[0]).toBe(true);

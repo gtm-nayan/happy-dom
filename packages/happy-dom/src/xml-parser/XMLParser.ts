@@ -30,15 +30,18 @@ const MARKUP_REGEXP =
  * Attribute RegExp.
  *
  * Group 1: Attribute name when the attribute has a value using double apostrophe (e.g. "name" in "<div name="value">").
- * Group 2: Attribute value when the attribute has a value using double apostrophe (e.g. "value" in "<div name="value">").
- * Group 3: Attribute name when the attribute has a value using single apostrophe (e.g. "name" in "<div name='value'>").
- * Group 4: Attribute value when the attribute has a value using single apostrophe (e.g. "value" in "<div name='value'>").
- * Group 5: Attribute name when the attribute has a value using no apostrophe (e.g. "name" in "<div name=value>").
- * Group 6: Attribute value when the attribute has a value using no apostrophe (e.g. "value" in "<div name=value>").
- * Group 7: Attribute name when the attribute has no value (e.g. "disabled" in "<div disabled>").
+ * Group 2: Attribute apostrophe value using double apostrophe (e.g. "value" in "<div name="value">").
+ * Group 3: Attribute value when the attribute has a value using double apostrophe (e.g. "value" in "<div name="value">").
+ * Group 4: Attribute apostrophe when the attribute has a value using double apostrophe (e.g. "value" in "<div name="value">").
+ * Group 5: Attribute name when the attribute has a value using single apostrophe (e.g. "name" in "<div name='value'>").
+ * Group 6: Attribute apostrophe when the attribute has a value using single apostrophe (e.g. "name" in "<div name='value'>").
+ * Group 7: Attribute value when the attribute has a value using single apostrophe (e.g. "value" in "<div name='value'>").
+ * Group 8: Attribute apostrophe when the attribute has a value using single apostrophe (e.g. "name" in "<div name='value'>").
+ * Group 9: Attribute name when the attribute has no value (e.g. "disabled" in "<div disabled>").
+ * Group 10: Invalid characters to trim.
  */
 const ATTRIBUTE_REGEXP =
-	/\s*([a-zA-Z0-9-_:]+) *= *"([^"]*)"|\s*([a-zA-Z0-9-_:]+) *= *'([^']*)'|\s*([a-zA-Z0-9-_:]+) *= *([^"' >]+)|\s+([a-zA-Z0-9-_:]+)(?:\s+|$)/gm;
+	/\s*([a-zA-Z0-9-_:]+) *= *("{0,1})([^"]*)("{0,1})|\s*([a-zA-Z0-9-_:]+) *= *('{0,1})([^']*)('{0,1})|\s*([a-zA-Z0-9-_:]+)|\s*([^a-zA-Z0-9-_:]+$)/gm;
 
 enum MarkupReadStateEnum {
 	startOrEndTag = 'startOrEndTag',
@@ -72,7 +75,7 @@ export default class XMLParser {
 	): IDocumentFragment {
 		const root = document.createDocumentFragment();
 		const stack: INode[] = [root];
-		const markupRegexp = new RegExp(MARKUP_REGEXP, 'gi');
+		const markupRegexp = new RegExp(MARKUP_REGEXP, 'gm');
 		let currentNode: INode | null = root;
 		let match: RegExpExecArray;
 		let plainTextTagName: string | null = null;
@@ -187,19 +190,31 @@ export default class XMLParser {
 							// Attribute name and value.
 
 							const attributeString = data.substring(startTagIndex, match.index);
-							let attributeMatch: RegExpExecArray;
+							if (attributeString) {
+								const attributeRegexp = new RegExp(ATTRIBUTE_REGEXP, 'gm');
+								let attributeMatch: RegExpExecArray;
+								let attributeLatestIndex = 0;
 
-							while ((attributeMatch = ATTRIBUTE_REGEXP.exec(attributeString))) {
-								const name =
-									attributeMatch[1] || attributeMatch[3] || attributeMatch[5] || attributeMatch[7];
-								const rawValue = attributeMatch[2] || attributeMatch[4] || attributeMatch[6];
-								const value = rawValue ? decode(rawValue) : '';
-								const namespaceURI =
-									(<IElement>currentNode).tagName === 'SVG' && name === 'xmlns' ? value : null;
+								while ((attributeMatch = attributeRegexp.exec(attributeString))) {
+									if (
+										(attributeMatch[1] && attributeMatch[2] === attributeMatch[4]) ||
+										(attributeMatch[5] && attributeMatch[6] === attributeMatch[8]) ||
+										attributeMatch[9]
+									) {
+										const name = attributeMatch[1] || attributeMatch[5] || attributeMatch[9] || '';
+										const rawValue = attributeMatch[3] || attributeMatch[7] || '';
+										const value = rawValue ? decode(rawValue) : '';
+										const namespaceURI =
+											(<IElement>currentNode).tagName === 'SVG' && name === 'xmlns' ? value : null;
 
-								(<IElement>currentNode).setAttributeNS(namespaceURI, name, value);
+										(<IElement>currentNode).setAttributeNS(namespaceURI, name, value);
 
-								startTagIndex += attributeMatch[0].length;
+										startTagIndex += attributeMatch[0].length;
+										attributeLatestIndex = attributeRegexp.lastIndex;
+									} else if (attributeMatch[10] && attributeLatestIndex === attributeMatch.index) {
+										startTagIndex += attributeMatch[0].length;
+									}
+								}
 							}
 
 							// We need to check if the attribute string is read completely.

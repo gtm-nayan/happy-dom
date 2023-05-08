@@ -501,7 +501,6 @@ describe('XMLParser', () => {
 
 			for (const html of testHTML) {
 				const root = XMLParser.parse(window.document, html);
-				debugger;
 				expect(new XMLSerializer().serializeToString(root)).toBe(html);
 			}
 		});
@@ -522,6 +521,7 @@ describe('XMLParser', () => {
 		});
 
 		it('Parses HTML with attributes using colon (:).', () => {
+			debugger;
 			const root = XMLParser.parse(
 				window.document,
 				'<template><component :is="type" :disabled="index > 1" data-testid="button"/></template>'
