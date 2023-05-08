@@ -137,6 +137,58 @@ describe('XMLParser', () => {
 			expect(new XMLSerializer().serializeToString(root)).toBe(GET_EXPECTED_HTML(pageHTML));
 		});
 
+		it('Handles unnestable elements correctly when there are siblings.', () => {
+			const root = XMLParser.parse(
+				window.document,
+				`<article>
+                    <span>
+                        <div>
+                            <a><a>Test</a></a>
+                        </div>
+                    </span>
+                    <b>Test</b>
+                </article>`
+			);
+			expect(new XMLSerializer().serializeToString(root).replace(/\s/gm, '')).toBe(
+				`
+                <article>
+                    <span>
+                        <div>
+                            <a></a><a>Test</a>
+                        </div>
+                    </span>
+                    <b>Test</b>
+                </article>
+            `.replace(/\s/gm, '')
+			);
+		});
+
+		it('Handles unnestable elements correctly when the nested element is wrapped by another element.', () => {
+			const root = XMLParser.parse(
+				window.document,
+				`<article>
+                    <span>
+                        <div>
+                            <a><span><a>Test</a></span></a>
+                        </div>
+                    </span>
+                    <b>Test</b>
+                </article>`
+			);
+			expect(new XMLSerializer().serializeToString(root).replace(/\s/gm, '')).toBe(
+				`
+                <article>
+                    <span>
+                        <div>
+                            <a><span></span></a><a>Test</a>
+                        </div>
+                    </span>
+                    <b>Test</b>
+                </article>
+            `.replace(/\s/gm, '')
+			);
+		});
+
 		it('Parses a page with document type set to "MathML 1.01".', () => {
 			const pageHTML = XMLParserHTML.trim().replace(
 				'<!DOCTYPE html>',
@@ -165,7 +217,7 @@ describe('XMLParser', () => {
 				`
 			);
 
-			expect(new XMLSerializer().serializeToString(root)).toBe(
+			expect(new XMLSerializer().serializeToString(root).replace(/\s/gm, '')).toBe(
 				`
 				<div class="test" disabled="">
 					<ul>
@@ -175,7 +227,7 @@ describe('XMLParser', () => {
 					</ul>
 					<a></a><a>Test</a>
 				</div>
-				`
+				`.replace(/\s/gm, '')
 			);
 		});
 
@@ -229,7 +281,6 @@ describe('XMLParser', () => {
 		});
 
 		it('Parses an SVG with "xmlns" set to HTML.', () => {
-			debugger;
 			const root = XMLParser.parse(
 				window.document,
 				`
@@ -353,7 +404,7 @@ describe('XMLParser', () => {
 			`
 			);
 
-			expect(new XMLSerializer().serializeToString(root)).toBe(
+			expect(new XMLSerializer().serializeToString(root).replace(/\s/gm, '')).toBe(
 				`
 				<div>
 					<svg viewBox="0 0 300 100" stroke="red" fill="grey" xmlns="http://www.w3.org/1999/xhtml">
@@ -372,7 +423,7 @@ describe('XMLParser', () => {
 						</svg>
 					</polygon>
 				</path>
-			</line></ellipse></svg></div>`
+			</line></ellipse></svg></div>`.replace(/\s/gm, '')
 			);
 		});
 
@@ -450,6 +501,7 @@ describe('XMLParser', () => {
 
 			for (const html of testHTML) {
 				const root = XMLParser.parse(window.document, html);
+				debugger;
 				expect(new XMLSerializer().serializeToString(root)).toBe(html);
 			}
 		});
@@ -470,7 +522,6 @@ describe('XMLParser', () => {
 		});
 
 		it('Parses HTML with attributes using colon (:).', () => {
-			debugger;
 			const root = XMLParser.parse(
 				window.document,
 				'<template><component :is="type" :disabled="index > 1" data-testid="button"/></template>'

@@ -24,7 +24,7 @@ import INode from '../nodes/node/INode';
  * Group 8: End tag (e.g. "div" in "</div>").
  */
 const MARKUP_REGEXP =
-	/<!--([^->]+)-{0,2}>|<!([^>]+)>|<\?([a-zA-Z0-9-]+) ([^?]+)\?>|<([a-zA-Z-]+)|(\/>)|(>)|<\/([a-zA-Z-]+)>/gm;
+	/<!--([^->]+)-{0,2}>|<!([^>]+)>|<\?([a-zA-Z0-9-]+) ([^?]+)\?>|<([a-zA-Z0-9-]+)|\s*(\/>)|\s*(>)|<\/([a-zA-Z0-9-]+)>/gm;
 
 /**
  * Attribute RegExp.
@@ -85,10 +85,6 @@ export default class XMLParser {
 			data = String(data);
 
 			while ((match = markupRegexp.exec(data))) {
-				if (!currentNode) {
-					return root;
-				}
-
 				switch (readState) {
 					case MarkupReadStateEnum.startOrEndTag:
 						if (
@@ -109,7 +105,7 @@ export default class XMLParser {
 							// @Refer: https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/
 							if (match[1].startsWith('[if ') && match[1].endsWith(']')) {
 								readState = MarkupReadStateEnum.plainTextContent;
-								startTagIndex = match.index;
+								startTagIndex = match.index + 4;
 							} else {
 								currentNode.appendChild(document.createComment(match[1]));
 							}
@@ -134,9 +130,16 @@ export default class XMLParser {
 							// Therefore we need to auto-close the tag, so that it become valid (e.g. "<a></a><a></a>").
 							const unnestableTagNameIndex = unnestableTagNames.indexOf(tagName);
 							if (unnestableTagNameIndex !== -1) {
-								stack.pop();
-								currentNode = stack[stack.length - 1] || root;
 								unnestableTagNames.splice(unnestableTagNameIndex, 1);
+								while (currentNode !== root) {
+									if ((<IElement>currentNode).tagName === tagName) {
+										stack.pop();
+										currentNode = stack[stack.length - 1] || root;
+										break;
+									}
+									stack.pop();
+									currentNode = stack[stack.length - 1] || root;
+								}
 							}
 
 							// NamespaceURI is inherited from the parent element.
@@ -155,17 +158,19 @@ export default class XMLParser {
 						} else if (match[8]) {
 							// End tag.
 
-							// Some elements are not allowed to be nested (e.g. "<a><a></a></a>" is not allowed.).
-							// Therefore we need to auto-close the tag, so that it become valid (e.g. "<a></a><a></a>").
-							const unnestableTagNameIndex = unnestableTagNames.indexOf(
-								(<IElement>currentNode).tagName
-							);
-							if (unnestableTagNameIndex !== -1) {
-								unnestableTagNames.splice(unnestableTagNameIndex, 1);
-							}
+							if (match[8].toUpperCase() === (<IElement>currentNode).tagName) {
+								// Some elements are not allowed to be nested (e.g. "<a><a></a></a>" is not allowed.).
+								// Therefore we need to auto-close the tag, so that it become valid (e.g. "<a></a><a></a>").
+								const unnestableTagNameIndex = unnestableTagNames.indexOf(
+									(<IElement>currentNode).tagName
+								);
+								if (unnestableTagNameIndex !== -1) {
+									unnestableTagNames.splice(unnestableTagNameIndex, 1);
+								}
 
-							stack.pop();
-							currentNode = stack[stack.length - 1] || root;
+								stack.pop();
+								currentNode = stack[stack.length - 1] || root;
+							}
 						} else {
 							// Plain text between tags, including the match as it is not a valid start or end tag.
 
@@ -248,11 +253,19 @@ export default class XMLParser {
 							currentNode = stack[stack.length - 1] || root;
 							plainTextTagName = null;
 							readState = MarkupReadStateEnum.startOrEndTag;
-						} else if (!plainTextTagName && match[1] && match[1] === '[endif]') {
+						} else if (
+							!plainTextTagName &&
+							(match[1] === '[endif]' || match[2] === '[endif]' || match[2] === '[endif]--')
+						) {
 							// End of conditional comment.
 
 							currentNode.appendChild(
-								document.createTextNode(data.substring(startTagIndex, match.index))
+								document.createComment(
+									data.substring(
+										startTagIndex,
+										markupRegexp.lastIndex - 1 - ((match[1] || match[2]).endsWith('-') ? 2 : 0)
+									)
+								)
 							);
 
 							readState = MarkupReadStateEnum.startOrEndTag;
