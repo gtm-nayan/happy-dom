@@ -521,7 +521,6 @@ describe('XMLParser', () => {
 		});
 
 		it('Parses HTML with attributes using colon (:).', () => {
-			debugger;
 			const root = XMLParser.parse(
 				window.document,
 				'<template><component :is="type" :disabled="index > 1" data-testid="button"/></template>'

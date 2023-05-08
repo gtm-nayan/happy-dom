@@ -673,7 +673,6 @@ describe('QuerySelector', () => {
 		});
 
 		it('Returns all elements matching "[data-foo]:not([data-bar])".', () => {
-			debugger;
 			document.body.innerHTML = `
 				<div data-foo data-bar class="foo bar"></div>
 				<div data-foo class="foo"></div>
@@ -709,7 +708,6 @@ describe('QuerySelector', () => {
 
 		it('Returns all elements matching ":nth-child(n+8)".', () => {
 			const container = document.createElement('div');
-			debugger;
 			container.innerHTML = QuerySelectorNthChildHTML;
 			const elements = container.querySelectorAll(':nth-child(n+8)');
 
