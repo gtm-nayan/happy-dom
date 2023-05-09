@@ -15,7 +15,7 @@ const GET_EXPECTED_HTML = (html: string): string =>
 		.replace('<?processing instruction?>', '<!--?processing instruction?-->')
 		.replace('<!Exclamation mark comment>', '<!--Exclamation mark comment-->')
 		.replace('<!DOCTYPE HTML', '<!DOCTYPE html')
-		.replace('<self-closing-custom-tag />', '<self-closing-custom-tag></self-closing-custom-tag>');
+		.replace('<img />', '<img>');
 
 describe('XMLParser', () => {
 	let window: IWindow;
@@ -534,6 +534,97 @@ describe('XMLParser', () => {
 			expect((<IHTMLElement>template.content.childNodes[0]).getAttribute(':disabled')).toBe(
 				'index > 1'
 			);
+		});
+
+		it('Doesn\'t close non-void elements when using "/>" when namespace is HTML.', () => {
+			const root = XMLParser.parse(
+				window.document,
+				`
+                <span key1="value1"/>
+                <span key1="value1" key2/>
+                <span key2/>
+                `
+			);
+
+			expect(new XMLSerializer().serializeToString(root).replace(/\s/gm, '')).toBe(
+				`
+                <span key1="value1">
+                    <span key1="value1" key2="">
+                        <span key2=""></span>
+                    </span>
+                </span>`.replace(/\s/gm, '')
+			);
+		});
+
+		it('Parses malformed attributes.', () => {
+			const root = XMLParser.parse(
+				window.document,
+				`
+                <span key1="value1""></span>
+                <span key1="value1"" key2></span>
+                <span key1 key2 key3="value3""></span>
+                <img key1="value1"" key2/>
+                <img key1="value1""
+                />
+                <img key1="value1""
+                key2/>
+                <span key1 key2 key3="value3"''" " "></span>
+                <span key1="value1 > value2"></span>
+                <img key1="value1 /> value2"/>
+                `
+			);
+
+			expect(root.children.length).toBe(8);
+
+			expect(root.children[0].attributes.length).toBe(1);
+			expect(root.children[0].attributes[0].name).toBe('key1');
+			expect(root.children[0].attributes[0].value).toBe('value1');
+
+			expect(root.children[1].attributes.length).toBe(2);
+			expect(root.children[1].attributes[0].name).toBe('key1');
+			expect(root.children[1].attributes[0].value).toBe('value1');
+			expect(root.children[1].attributes[1].name).toBe('key2');
+			expect(root.children[1].attributes[1].value).toBe('');
+
+			expect(root.children[2].attributes.length).toBe(3);
+			expect(root.children[2].attributes[0].name).toBe('key1');
+			expect(root.children[2].attributes[0].value).toBe('');
+			expect(root.children[2].attributes[1].name).toBe('key2');
+			expect(root.children[2].attributes[1].value).toBe('');
+			expect(root.children[2].attributes[2].name).toBe('key3');
+			expect(root.children[2].attributes[2].value).toBe('value3');
+
+			expect(root.children[3].attributes.length).toBe(2);
+			expect(root.children[3].attributes[0].name).toBe('key1');
+			expect(root.children[3].attributes[0].value).toBe('value1');
+			expect(root.children[3].attributes[1].name).toBe('key2');
+			expect(root.children[3].attributes[1].value).toBe('');
+
+			expect(root.children[4].attributes.length).toBe(1);
+			expect(root.children[4].attributes[0].name).toBe('key1');
+			expect(root.children[4].attributes[0].value).toBe('value1');
+
+			expect(root.children[5].attributes.length).toBe(2);
+			expect(root.children[5].attributes[0].name).toBe('key1');
+			expect(root.children[5].attributes[0].value).toBe('value1');
+			expect(root.children[5].attributes[1].name).toBe('key2');
+			expect(root.children[5].attributes[1].value).toBe('');
+
+			expect(root.children[6].attributes.length).toBe(3);
+			expect(root.children[6].attributes[0].name).toBe('key1');
+			expect(root.children[6].attributes[0].value).toBe('');
+			expect(root.children[6].attributes[1].name).toBe('key2');
+			expect(root.children[6].attributes[1].value).toBe('');
+			expect(root.children[6].attributes[2].name).toBe('key3');
+			expect(root.children[6].attributes[2].value).toBe('value3');
+
+			expect(root.children[7].attributes.length).toBe(1);
+			expect(root.children[7].attributes[0].name).toBe('key1');
+			expect(root.children[7].attributes[0].value).toBe('value1 > value2');
+
+			expect(root.children[8].attributes.length).toBe(1);
+			expect(root.children[8].attributes[0].name).toBe('key1');
+			expect(root.children[8].attributes[0].value).toBe('value1 /> value2');
 		});
 	});
 });

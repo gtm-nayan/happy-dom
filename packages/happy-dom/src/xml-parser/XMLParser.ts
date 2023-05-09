@@ -38,10 +38,9 @@ const MARKUP_REGEXP =
  * Group 7: Attribute value when the attribute has a value using single apostrophe (e.g. "value" in "<div name='value'>").
  * Group 8: Attribute apostrophe when the attribute has a value using single apostrophe (e.g. "name" in "<div name='value'>").
  * Group 9: Attribute name when the attribute has no value (e.g. "disabled" in "<div disabled>").
- * Group 10: Invalid characters to trim.
  */
 const ATTRIBUTE_REGEXP =
-	/\s*([a-zA-Z0-9-_:]+) *= *("{0,1})([^"]*)("{0,1})|\s*([a-zA-Z0-9-_:]+) *= *('{0,1})([^']*)('{0,1})|\s*([a-zA-Z0-9-_:]+)|\s*([^a-zA-Z0-9-_:]+$)/gm;
+	/\s*([a-zA-Z0-9-_:]+) *= *("{0,1})([^"]*)("{0,1})|\s*([a-zA-Z0-9-_:]+) *= *('{0,1})([^']*)('{0,1})|\s*([a-zA-Z0-9-_:]+)/gm;
 
 enum MarkupReadStateEnum {
 	startOrEndTag = 'startOrEndTag',
@@ -190,10 +189,11 @@ export default class XMLParser {
 							// Attribute name and value.
 
 							const attributeString = data.substring(startTagIndex, match.index);
-							if (attributeString) {
+							let hasAttributeStringEnded = true;
+
+							if (!!attributeString) {
 								const attributeRegexp = new RegExp(ATTRIBUTE_REGEXP, 'gm');
 								let attributeMatch: RegExpExecArray;
-								let attributeLatestIndex = 0;
 
 								while ((attributeMatch = attributeRegexp.exec(attributeString))) {
 									if (
@@ -212,20 +212,21 @@ export default class XMLParser {
 										(<IElement>currentNode).setAttributeNS(namespaceURI, name, value);
 
 										startTagIndex += attributeMatch[0].length;
-										attributeLatestIndex = attributeRegexp.lastIndex;
-									} else if (attributeMatch[10] && attributeLatestIndex === attributeMatch.index) {
-										// Invalid characters that should be trimmed.
-
-										startTagIndex += attributeMatch[0].length;
+									} else {
+										hasAttributeStringEnded = false;
+										break;
 									}
 								}
 							}
 
 							// We need to check if the attribute string is read completely.
 							// The attribute string can potentially contain "/>" or ">".
-							if (startTagIndex === match.index) {
+							if (hasAttributeStringEnded) {
 								// Non-self-closing tag
-								if (match[7] && !VoidElements.includes((<IElement>currentNode).tagName)) {
+								if (
+									(match[7] || (<IElement>currentNode).namespaceURI === NamespaceURI.html) &&
+									!VoidElements.includes((<IElement>currentNode).tagName)
+								) {
 									// Plain text elements such as <script> and <style> should only contain text.
 									plainTextTagName = PlainTextElements.includes((<IElement>currentNode).tagName)
 										? (<IElement>currentNode).tagName

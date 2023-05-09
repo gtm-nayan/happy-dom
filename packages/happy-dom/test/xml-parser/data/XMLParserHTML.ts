@@ -19,7 +19,7 @@ export default `
 				<!-- Comment 2 !-->
 			</article>
 			<img>
-			<self-closing-custom-tag />
+			<img />
 		</body>
 	</html>
 `.trim();
