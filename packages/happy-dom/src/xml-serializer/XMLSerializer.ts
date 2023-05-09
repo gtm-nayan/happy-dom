@@ -27,7 +27,7 @@ export default class XMLSerializer {
 				const element = <Element>root;
 				const tagName = element.tagName.toLowerCase();
 
-				if (VoidElements.includes(element.tagName)) {
+				if (VoidElements[element.tagName]) {
 					return `<${tagName}${this._getAttributes(element)}>`;
 				}
 

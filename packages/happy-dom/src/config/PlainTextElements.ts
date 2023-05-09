@@ -1,1 +1,4 @@
-export default ['STYLE', 'SCRIPT'];
+export default {
+	STYLE: true,
+	SCRIPT: true
+};

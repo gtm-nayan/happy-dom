@@ -28,7 +28,7 @@ describe('XMLParser', () => {
 
 	describe('parse()', () => {
 		it('Parses HTML with a single <div>.', () => {
-			const root = XMLParser.parse(window.document, '<div></div>');
+			const root = XMLParser.parse(document, '<div></div>');
 			expect(root.childNodes.length).toBe(1);
 			expect(root.childNodes[0].childNodes.length).toBe(0);
 			expect((<IHTMLElement>root.childNodes[0]).tagName).toBe('DIV');
@@ -36,7 +36,7 @@ describe('XMLParser', () => {
 
 		it('Parses HTML with a single <div> with attributes.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				'<div class="class1 class2" id="id" data-no-value></div>'
 			);
 			expect(root.childNodes.length).toBe(1);
@@ -120,7 +120,7 @@ describe('XMLParser', () => {
 		});
 
 		it('Parses an entire HTML page.', () => {
-			const root = XMLParser.parse(window.document, XMLParserHTML);
+			const root = XMLParser.parse(document, XMLParserHTML);
 			expect(new XMLSerializer().serializeToString(root)).toBe(GET_EXPECTED_HTML(XMLParserHTML));
 		});
 
@@ -129,7 +129,7 @@ describe('XMLParser', () => {
 				'<!DOCTYPE html>',
 				'<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">'
 			);
-			const root = XMLParser.parse(window.document, pageHTML);
+			const root = XMLParser.parse(document, pageHTML);
 			const doctype = <DocumentType>root.childNodes[0];
 			expect(doctype.name).toBe('html');
 			expect(doctype.publicId).toBe('-//W3C//DTD HTML 4.01//EN');
@@ -139,7 +139,7 @@ describe('XMLParser', () => {
 
 		it('Handles unnestable elements correctly when there are siblings.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`<article>
                     <span>
                         <div>
@@ -165,7 +165,7 @@ describe('XMLParser', () => {
 
 		it('Handles unnestable elements correctly when the nested element is wrapped by another element.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`<article>
                     <span>
                         <div>
@@ -194,7 +194,7 @@ describe('XMLParser', () => {
 				'<!DOCTYPE html>',
 				'<!DOCTYPE math SYSTEM "http://www.w3.org/Math/DTD/mathml1/mathml.dtd">'
 			);
-			const root = XMLParser.parse(window.document, pageHTML);
+			const root = XMLParser.parse(document, pageHTML);
 			const doctype = <DocumentType>root.childNodes[0];
 			expect(doctype.name).toBe('math');
 			expect(doctype.publicId).toBe('');
@@ -204,7 +204,7 @@ describe('XMLParser', () => {
 
 		it('Handles unclosed tags of unnestable elements (e.g. <a>, <li>).', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`
 				<div class="test" disabled>
 					<ul>
@@ -233,7 +233,7 @@ describe('XMLParser', () => {
 
 		it('Does not parse the content of script and style elements.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`<div>
 					<script>if(1<Math['random']()){}else if(Math['random']()>1){console.log("1")}</script>
 					<script><b></b></script>
@@ -257,7 +257,7 @@ describe('XMLParser', () => {
 			);
 
 			const root2 = XMLParser.parse(
-				window.document,
+				document,
 				`<html>
 	<head>
 		<title>Title</title>
@@ -273,7 +273,7 @@ describe('XMLParser', () => {
 		});
 
 		it('Handles unclosed regular elements.', () => {
-			const root = XMLParser.parse(window.document, `<div>test`);
+			const root = XMLParser.parse(document, `<div>test`);
 
 			expect(root.childNodes.length).toBe(1);
 			expect((<IHTMLElement>root.childNodes[0]).tagName).toBe('DIV');
@@ -282,7 +282,7 @@ describe('XMLParser', () => {
 
 		it('Parses an SVG with "xmlns" set to HTML.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`
 				<div>
 					<svg viewBox="0 0 300 100" stroke="red" fill="grey" xmlns="${NamespaceURI.html}">
@@ -382,7 +382,7 @@ describe('XMLParser', () => {
 
 		it('Parses a malformed SVG with "xmlns" set to HTML.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`
 				<div>
 					<svg viewBox="0 0 300 100" stroke="red" fill="grey" xmlns="${NamespaceURI.html}">
@@ -429,7 +429,7 @@ describe('XMLParser', () => {
 
 		it('Parses childless elements with start and end tag names in different case', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`
 				<script type="text/JavaScript">console.log('hello')</SCRIPT>
 				`
@@ -439,16 +439,16 @@ describe('XMLParser', () => {
 		});
 
 		it('Handles different value types.', () => {
-			const root1 = XMLParser.parse(window.document, null);
+			const root1 = XMLParser.parse(document, null);
 			expect(new XMLSerializer().serializeToString(root1)).toBe('');
 
-			const root2 = XMLParser.parse(window.document, undefined);
+			const root2 = XMLParser.parse(document, undefined);
 			expect(new XMLSerializer().serializeToString(root2)).toBe('');
 
-			const root3 = XMLParser.parse(window.document, <string>(<unknown>1000));
+			const root3 = XMLParser.parse(document, <string>(<unknown>1000));
 			expect(new XMLSerializer().serializeToString(root3)).toBe('1000');
 
-			const root4 = XMLParser.parse(window.document, <string>(<unknown>false));
+			const root4 = XMLParser.parse(document, <string>(<unknown>false));
 			expect(new XMLSerializer().serializeToString(root4)).toBe('false');
 		});
 
@@ -500,16 +500,13 @@ describe('XMLParser', () => {
 			];
 
 			for (const html of testHTML) {
-				const root = XMLParser.parse(window.document, html);
+				const root = XMLParser.parse(document, html);
 				expect(new XMLSerializer().serializeToString(root)).toBe(html);
 			}
 		});
 
 		it('Parses <template> elements, including its content.', () => {
-			const root = XMLParser.parse(
-				window.document,
-				'<div><template><tr><td></td></tr></template></div>'
-			);
+			const root = XMLParser.parse(document, '<div><template><tr><td></td></tr></template></div>');
 			expect(root.childNodes.length).toBe(1);
 			const template = <IHTMLTemplateElement>root.childNodes[0].childNodes[0];
 			expect(template.childNodes.length).toBe(0);
@@ -522,7 +519,7 @@ describe('XMLParser', () => {
 
 		it('Parses HTML with attributes using colon (:).', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				'<template><component :is="type" :disabled="index > 1" data-testid="button"/></template>'
 			);
 
@@ -538,7 +535,7 @@ describe('XMLParser', () => {
 
 		it('Doesn\'t close non-void elements when using "/>" when namespace is HTML.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`
                 <span key1="value1"/>
                 <span key1="value1" key2/>
@@ -558,7 +555,7 @@ describe('XMLParser', () => {
 
 		it('Parses malformed attributes.', () => {
 			const root = XMLParser.parse(
-				window.document,
+				document,
 				`
                 <span key1="value1""></span>
                 <span key1="value1"" key2></span>
@@ -574,7 +571,7 @@ describe('XMLParser', () => {
                 `
 			);
 
-			expect(root.children.length).toBe(8);
+			expect(root.children.length).toBe(9);
 
 			expect(root.children[0].attributes.length).toBe(1);
 			expect(root.children[0].attributes[0].name).toBe('key1');

@@ -5,11 +5,11 @@ import NamespaceURI from '../config/NamespaceURI';
 import HTMLScriptElement from '../nodes/html-script-element/HTMLScriptElement';
 import IElement from '../nodes/element/IElement';
 import HTMLLinkElement from '../nodes/html-link-element/HTMLLinkElement';
-import IDocumentFragment from '../nodes/document-fragment/IDocumentFragment';
 import PlainTextElements from '../config/PlainTextElements';
 import IDocumentType from '../nodes/document-type/IDocumentType';
-import { decode } from 'he';
 import INode from '../nodes/node/INode';
+import IDocumentFragment from '../nodes/document-fragment/IDocumentFragment';
+import { decode } from 'he';
 
 /**
  * Markup RegExp.
@@ -63,18 +63,21 @@ export default class XMLParser {
 	 * Parses XML/HTML and returns a root element.
 	 *
 	 * @param document Document.
-	 * @param data HTML data.
-	 * @param [evaluateScripts = false] Set to "true" to enable script execution.
-	 * @returns Root element.
+	 * @param xml XML/HTML string.
+	 * @param [options] Options.
+	 * @param [options.rootNode] Node to append elements to. Otherwise a new DocumentFragment is created.
+	 * @param [options.evaluateScripts = false] Set to "true" to enable script execution.
+	 * @returns Root node.
 	 */
 	public static parse(
 		document: IDocument,
-		data: string,
-		evaluateScripts = false
-	): IDocumentFragment {
-		const root = document.createDocumentFragment();
+		xml: string,
+		options?: { rootNode?: IElement | IDocumentFragment | IDocument; evaluateScripts?: boolean }
+	): IElement | IDocumentFragment | IDocument {
+		const root = options && options.rootNode ? options.rootNode : document.createDocumentFragment();
 		const stack: INode[] = [root];
 		const markupRegexp = new RegExp(MARKUP_REGEXP, 'gm');
+		const { evaluateScripts = false } = options || {};
 		let currentNode: INode | null = root;
 		let match: RegExpExecArray;
 		let plainTextTagName: string | null = null;
@@ -83,10 +86,10 @@ export default class XMLParser {
 		let startTagIndex = 0;
 		let lastIndex = 0;
 
-		if (data !== null && data !== undefined) {
-			data = String(data);
+		if (xml !== null && xml !== undefined) {
+			xml = String(xml);
 
-			while ((match = markupRegexp.exec(data))) {
+			while ((match = markupRegexp.exec(xml))) {
 				switch (readState) {
 					case MarkupReadStateEnum.startOrEndTag:
 						if (
@@ -96,7 +99,7 @@ export default class XMLParser {
 							// Plain text between tags.
 
 							currentNode.appendChild(
-								document.createTextNode(data.substring(lastIndex, match.index))
+								document.createTextNode(xml.substring(lastIndex, match.index))
 							);
 						}
 
@@ -115,7 +118,7 @@ export default class XMLParser {
 							// Exclamation mark comment (usually <!DOCTYPE>).
 
 							currentNode.appendChild(
-								this._getDocumentTypeNode(document, match[2]) || document.createComment(match[2])
+								this.getDocumentTypeNode(document, match[2]) || document.createComment(match[2])
 							);
 						} else if (match[3] && match[4]) {
 							// Processing instruction.
@@ -177,7 +180,7 @@ export default class XMLParser {
 							// Plain text between tags, including the match as it is not a valid start or end tag.
 
 							currentNode.appendChild(
-								document.createTextNode(data.substring(lastIndex, markupRegexp.lastIndex))
+								document.createTextNode(xml.substring(lastIndex, markupRegexp.lastIndex))
 							);
 						}
 						break;
@@ -188,7 +191,7 @@ export default class XMLParser {
 
 							// Attribute name and value.
 
-							const attributeString = data.substring(startTagIndex, match.index);
+							const attributeString = xml.substring(startTagIndex, match.index);
 							let hasAttributeStringEnded = true;
 
 							if (!!attributeString) {
@@ -212,7 +215,9 @@ export default class XMLParser {
 										(<IElement>currentNode).setAttributeNS(namespaceURI, name, value);
 
 										startTagIndex += attributeMatch[0].length;
-									} else {
+									} else if (!attributeMatch[4] && !attributeMatch[8]) {
+										// End attribute apostrophe is missing (e.g. "attr='value" or 'attr="value').
+
 										hasAttributeStringEnded = false;
 										break;
 									}
@@ -222,13 +227,20 @@ export default class XMLParser {
 							// We need to check if the attribute string is read completely.
 							// The attribute string can potentially contain "/>" or ">".
 							if (hasAttributeStringEnded) {
-								// Non-self-closing tag
+								// Checks if the tag is a self closing tag (ends with "/>") or void element.
+								// When it is a self closing tag or void element it should be closed immediately.
+								// Self closing tags are not allowed in the HTML namespace, but the parser should still allow it for void elements.
+								// Self closing tags is supported in the SVG namespace.
 								if (
-									(match[7] || (<IElement>currentNode).namespaceURI === NamespaceURI.html) &&
-									!VoidElements.includes((<IElement>currentNode).tagName)
+									(match[6] && (<IElement>currentNode).namespaceURI === NamespaceURI.svg) ||
+									VoidElements[(<IElement>currentNode).tagName]
 								) {
+									stack.pop();
+									currentNode = stack[stack.length - 1] || root;
+									readState = MarkupReadStateEnum.startOrEndTag;
+								} else {
 									// Plain text elements such as <script> and <style> should only contain text.
-									plainTextTagName = PlainTextElements.includes((<IElement>currentNode).tagName)
+									plainTextTagName = PlainTextElements[(<IElement>currentNode).tagName]
 										? (<IElement>currentNode).tagName
 										: null;
 
@@ -236,13 +248,9 @@ export default class XMLParser {
 										? MarkupReadStateEnum.plainTextContent
 										: MarkupReadStateEnum.startOrEndTag;
 
-									if (UnnestableElements.includes((<IElement>currentNode).tagName)) {
+									if (UnnestableElements[(<IElement>currentNode).tagName]) {
 										unnestableTagNames.push((<IElement>currentNode).tagName);
 									}
-								} else {
-									stack.pop();
-									currentNode = stack[stack.length - 1] || root;
-									readState = MarkupReadStateEnum.startOrEndTag;
 								}
 
 								startTagIndex = markupRegexp.lastIndex;
@@ -266,7 +274,7 @@ export default class XMLParser {
 
 							// Plain text elements such as <script> and <style> should only contain text.
 							currentNode.appendChild(
-								document.createTextNode(data.substring(startTagIndex, match.index))
+								document.createTextNode(xml.substring(startTagIndex, match.index))
 							);
 
 							stack.pop();
@@ -281,7 +289,7 @@ export default class XMLParser {
 
 							currentNode.appendChild(
 								document.createComment(
-									data.substring(
+									xml.substring(
 										startTagIndex,
 										markupRegexp.lastIndex - 1 - ((match[1] || match[2]).endsWith('-') ? 2 : 0)
 									)
@@ -297,10 +305,10 @@ export default class XMLParser {
 				lastIndex = markupRegexp.lastIndex;
 			}
 
-			if (lastIndex !== data.length) {
+			if (lastIndex !== xml.length) {
 				// Plain text after tags.
 
-				currentNode.appendChild(document.createTextNode(data.substring(lastIndex)));
+				currentNode.appendChild(document.createTextNode(xml.substring(lastIndex)));
 			}
 		}
 
@@ -314,7 +322,7 @@ export default class XMLParser {
 	 * @param value Value.
 	 * @returns Document type node.
 	 */
-	private static _getDocumentTypeNode(document: IDocument, value: string): IDocumentType {
+	private static getDocumentTypeNode(document: IDocument, value: string): IDocumentType {
 		if (!value.toUpperCase().startsWith('DOCTYPE')) {
 			return null;
 		}
@@ -328,7 +336,7 @@ export default class XMLParser {
 		const docTypeString = docTypeSplit.slice(1).join(' ');
 		const attributes = [];
 		const attributeRegExp = new RegExp(DOCUMENT_TYPE_ATTRIBUTE_REGEXP, 'gm');
-		const isPublic = docTypeString.includes('PUBLIC');
+		const isPublic = docTypeString.toUpperCase().includes('PUBLIC');
 		let attributeMatch;
 
 		while ((attributeMatch = attributeRegExp.exec(docTypeString))) {
